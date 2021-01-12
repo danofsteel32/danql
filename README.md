@@ -7,14 +7,13 @@ deal with the
 [object-relational impedence mismatch](http://blogs.tedneward.com/post/the-vietnam-of-computer-science/).
 
 ## About
-Orms just don't work for me. And writing the basic crud ops for every table
-takes too long. This library is the sweet spot for me in that it makes the
-easy stuff easy and leaves the hard stuff for plain sql.
+Orms typically don't work very well for people who like SQL. But writing the basic 
+CRUD ops for every table simply takes too long. This library is the sweet spot for me 
+in that it makes the easy stuff easy and makes the hard stuff easily doable in plain sql.
 
 ## Usage Guide
 You probably already have SQLite installed but if you don't just install it
 with your distros package manager or brew.
-
 
 ### Running Tests
 ```
@@ -25,7 +24,7 @@ make test
 pip install -e .
 ```
 ### Usage
-Define your table(s) in a regular sql file. I usually just call it tables.sql
+Define your table(s) in a regular sql file. I usually just call it `tables.sql`.
 ``` sql
 CREATE TABLE IF NOT EXISTS example (
     id           INTEGER PRIMARY KEY,
@@ -95,5 +94,4 @@ and then pass those rows as an argument to the update and delete methods.
 * More tests
 * mypy and type hinting
 * primary keys can be named something else besides id in get\_id()
-* create\_tables() creates __init__.py in out\_directory
 * print SQL statements and warnings only if DEBUG
