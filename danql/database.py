@@ -31,7 +31,7 @@ class Database:
         try:
             self.cur.execute(sql)
             return self.cur.lastrowid
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as e:
             return None
 
     def from_sqlfile(self, sqlfile):

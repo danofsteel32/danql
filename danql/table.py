@@ -140,7 +140,7 @@ class Table:
     def create_record(self, **kwargs):
         # Return newly created row id (pk) or return 
         # existing row id if inserting those values raises
-        # a sqlite3.IntegrityError (violated unique contrainst)
+        # a sqlite3.IntegrityError (violated unique constraint)
         columns, values = self.sanitize_kwargs(**kwargs)
         columns = ','.join(columns)
         values = self.properly_quoted(values)
@@ -229,20 +229,40 @@ class Table:
         return row_delta
 
     def batch_insert(self, val_list):
-        # val_list is [dicts]
-        # Much faster when inserting lots of rows
+        # val_list is List[dict]
+        # Much faster when inserting lots of values as long as none
+        # of the values violate uniqueness constraints (Best Case)
+        # If uniqueness violation then have to try inserting them one
+        # at a time with create_record() (Worst Case)
         # Returns number of rows created
-        # TODO CLEANUP
         columns = val_list[0].keys()
         if self.check_column_args(columns):
             columns = ','.join(list(columns))
-            val_list = [tuple(v.values()) for v in val_list]
-            vals = '{0}'.format(','.join(str(v) for v in val_list))
-            sql = "INSERT INTO {0} ({1}) VALUES {2}".format(self.table_name, columns, vals)
-            logging.debug(sql)
+        
+            for_insert = []
+            for val in val_list:
+                raw = list(val.values())
+                for_insert.append('({0})'.format(self.properly_quoted(raw)))
+
+            values = ','.join(for_insert)
+            sql = "INSERT INTO {0} ({1}) VALUES {2}"
+            batch_sql = sql.format(self.table_name, columns, values)
+            logging.debug(batch_sql)
             before_count = self.total_rows()
             with Database(self.db_file) as db:
-                db.insert(sql)
+                inserted = db.insert(batch_sql)
+            if inserted is None:
+                logging.debug("Your values violated uniqueness constraints")
+                logging.debug("Now inserting values one set at time as work around")
+
+                for values in for_insert:
+                    sql = "INSERT INTO {0} ({1}) VALUES {2}"
+                    sql = sql.format(self.table_name, columns, values)
+                    logging.debug(sql)
+                    with Database(self.db_file) as db:
+                        if db.insert(sql) is None:
+                            logging.debug("VIOLATING VALUES {0}".format(values))
+                    
             after_count = self.total_rows()
             row_delta = after_count - before_count
             return row_delta

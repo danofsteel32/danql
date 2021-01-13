@@ -4,7 +4,6 @@ import sys
 import unittest
 import shutil
 
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from danql import Database
 
@@ -32,6 +31,25 @@ class TestDanql(unittest.TestCase):
         gs_id1 = self.Breed.create_record(name='german shepard')
         gs_id2 = self.Breed.create_record(name='german shepard')
         self.assertEqual(gs_id1, gs_id2)
+
+    def test_batch_insert_one_column_only_violate_constraint(self):
+        self.Breed.create_record(name='german shepard')
+        val_list = [dict(name='cow'), dict(name='cat'), dict(name='german shepard')]
+        rows_created = self.Breed.batch_insert(val_list=val_list)
+        self.assertEqual(rows_created, 2)
+
+    def test_batch_insert_multiple_columns_violate_constraint(self):
+        gs_id = self.Breed.create_record(name='german shepard')
+        aus_id = self.Breed.create_record(name='aussie shepard')
+        cbf_id = self.Owner.create_record(name='chef bobby flay')
+        self.Dog.create_record(breed_id=gs_id, owner_id=cbf_id, name='larry')
+        val_list = [
+            dict(breed_id=aus_id, owner_id=cbf_id, name='jerry'),
+            dict(breed_id=gs_id, owner_id=cbf_id, name='larry')
+        ]
+        rows_created = self.Dog.batch_insert(val_list)
+        self.assertEqual(rows_created, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
