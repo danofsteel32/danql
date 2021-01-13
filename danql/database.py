@@ -34,16 +34,6 @@ class Database:
         except sqlite3.IntegrityError:
             return None
 
-    def insert_many(self, sql, insert_list):
-        # Bulk inserts are slow in a for loop
-        try:
-            self.cur.executemany(sql, insert_list)
-        except Exception as e:
-            if e == sqlite3.IntegrityError:
-                print(e)
-            else:
-                raise e
-
     def from_sqlfile(self, sqlfile):
         # TODO Figure out how to handle the different return types
         try:
