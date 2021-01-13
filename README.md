@@ -9,7 +9,7 @@ deal with the
 ## About
 Orms typically don't work very well for people who like SQL. But writing the basic 
 CRUD ops for every table simply takes too long. This library is the sweet spot for me 
-in that it makes the easy stuff easy and makes the hard stuff easily doable in plain sql.
+in that it makes the easy stuff quick and the hard stuff easily doable in plain sql.
 
 ## Usage Guide
 You probably already have SQLite installed but if you don't just install it

@@ -299,10 +299,9 @@ class Table:
             logging.debug(sql)
             with Database(self.db_file) as db:
                 results = db.query(sql)
-                if results is not None:
-                    if len(results) == 1:
-                        return results[0]['id']
-                return results
+                if len(results) > 0:
+                    return results[0]['id']
+                return None
     
     def column_equal_value(self, col_val_pairs, not_equal=False):
         pairs = []

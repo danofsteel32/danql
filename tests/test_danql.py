@@ -50,7 +50,27 @@ class TestDanql(unittest.TestCase):
         rows_created = self.Dog.batch_insert(val_list)
         self.assertEqual(rows_created, 1)
 
+    def test_total_rows(self):
+        before = self.Breed.total_rows()
+        self.assertEqual(before, 0)
+        self.Breed.create_record(name='german shepard')
+        after = self.Breed.total_rows()
+        self.assertEqual(after, before+1)
+
+    def test_column_equal_value(self):
+        col_val_pairs = dict(name='larry', owner_id=1)
+        _is = self.Dog.column_equal_value(col_val_pairs)
+        _not = self.Dog.column_equal_value(col_val_pairs, not_equal=True)
+
+    def test_get_id_when_no_id(self):
+        corn_dog = self.Breed.get_id(name='corn dog')
+        self.assertIsNone(corn_dog)
+
+    def test_get_id(self):
+        self.Breed.create_record(name='german shepard')
+        gs_id = self.Breed.get_id(name='german shepard')
+        self.assertEqual(gs_id, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
-    print('TESTS PASSED')
