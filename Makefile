@@ -3,6 +3,6 @@ init:
 test:
 	rm -rf tests/out
 	rm -f tests/test.db
-	python3 tests/test_danql.py
+	DEBUG=1 python3 tests/test_danql.py
 
 .PHONY: init test

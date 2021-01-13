@@ -1,4 +1,10 @@
+import logging
+import os
+
 from .database import Database
+
+if os.getenv('DEBUG', None) is not None:
+    logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 
 class Table:
     """ Abstraction of a database table
@@ -115,7 +121,7 @@ class Table:
         columns = self.columns.keys()
         for col in column_args:
             if col not in self.columns:
-                print(self.columns)
+                logging.debug(self.columns)
                 error_msg = 'Column {0} is not a valid column on table {1}'
                 raise ValueError(error_msg.format(col, self.table_name))
         return True
@@ -140,11 +146,11 @@ class Table:
         values = self.properly_quoted(values)
         sql = "INSERT INTO {0} ({1}) VALUES ({2})"
         sql = sql.format(self.table_name, columns, values)
-        print(sql)
+        logging.debug(sql)
         with Database(self.db_file) as db:
             new_row_id = db.insert(sql)
             if new_row_id is None:
-                print('Row already exists')
+                logging.debug('Row already exists')
                 columns, values = self.sanitize_kwargs(**kwargs)
                 col_val_zipped = dict(zip(columns, values))
                 existing_row_id = self.get_id(**col_val_zipped)
@@ -160,7 +166,7 @@ class Table:
         col_val_pairs = self.column_equal_value(dict(zip(columns, values)))
         sql = "SELECT * FROM {0} WHERE {1}"
         sql = sql.format(self.table_name, col_val_pairs)
-        print(sql)
+        logging.debug(sql)
         with Database(self.db_file) as db:
             results = db.query(sql)
         return results
@@ -171,7 +177,7 @@ class Table:
         # kwargs is col=val; col gets updated to val on $rows
         # returns list of updated rows
         if rows is None:
-            print('rows was None')
+            logging.debug('rows was None')
             return None
 
         if self.check_column_args(kwargs.keys()):
@@ -192,10 +198,10 @@ class Table:
             updated_rows = []
             with Database(self.db_file) as db:
                 for statement in update_statements:
-                    print(statement)
+                    logging.debug(statement)
                     db.query(statement)
                 for statement in select_statements:
-                    print(statement)
+                    logging.debug(statement)
                     updated_rows.append(db.query(statement)[0])
             return updated_rows
 
@@ -203,7 +209,7 @@ class Table:
         # rows is list of rows to be deleted
         # Returns number of rows deleted
         if rows is None:
-            print('rows was None')
+            logging.debug('rows was None')
             return None
         delete_statements = []
         for row in rows:
@@ -216,7 +222,7 @@ class Table:
         before_count = self.total_rows()
         with Database(self.db_file) as db:
             for statement in delete_statements:
-                print(statement)
+                logging.debug(statement)
                 db.query(sql)
         after_count = self.total_rows()
         row_delta = before_count - after_count
@@ -233,7 +239,7 @@ class Table:
             val_list = [tuple(v.values()) for v in val_list]
             vals = '{0}'.format(','.join(str(v) for v in val_list))
             sql = "INSERT INTO {0} ({1}) VALUES {2}".format(self.table_name, columns, vals)
-            print(sql)
+            logging.debug(sql)
             before_count = self.total_rows()
             with Database(self.db_file) as db:
                 db.insert(sql)
@@ -252,7 +258,7 @@ class Table:
         if self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
         sql = "SELECT count(*) FROM {0} WHERE {1}".format(self.table_name, col_val_pairs)
-        print(sql)
+        logging.debug(sql)
         with Database(self.db_file) as db:
             count = db.query(sql)
         return count[0][0]
@@ -270,7 +276,7 @@ class Table:
 
             sql = "SELECT id FROM {0} WHERE {1}"
             sql = sql.format(self.table_name, col_val_pairs)
-            print(sql)
+            logging.debug(sql)
             with Database(self.db_file) as db:
                 results = db.query(sql)
                 if results is not None:
@@ -309,7 +315,7 @@ class Table:
 
     def __str__(self):
         # This is pretty cancerous but its string building what do you expect
-        # Only needed to pretty print table schema
+        # Only needed to pretty logging.debug table schema
         cols = ['  {0}\n'.format(col.__str__()) for col in self.columns.values()]
         c = ''.join(cols)
         parents = ['  Parent(table={0} from={1} to={2})\n'.format(p['table'], p['from'], p['to']) for p in self.parents]
