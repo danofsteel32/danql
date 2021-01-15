@@ -343,6 +343,8 @@ class Table:
     def properly_quoted(values):
         def quoted(val):
             if type(val) == str:
+                val = val.replace('"', '')
+                val = val.replace ("'", '')
                 return f"'{val}'"
             elif type(val) == int or type(val) == float:
                 return str(val)
