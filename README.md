@@ -92,5 +92,4 @@ and then pass those rows as an argument to the update and delete methods.
 
 ## TODO
 * primary keys can be named something else besides id in `get_id()`
-* build more complex example
-* `create_tables` should never overwrite anything
+* build fully fleshed out example

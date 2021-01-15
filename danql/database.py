@@ -70,14 +70,17 @@ class Database:
         for table in tables:
             table = table[0]
             class_definition = self.class_definition_from_table_name(table)
-            if out_directory is not None:
-                # TODO os.path.join
-                out_directory = out_directory.strip('/')
-                filepath = f'{out_directory}/{table}.py'
-                with open(filepath, 'w') as f:
-                    f.write(class_definition)
-            else:
+            if out_directory is None:
                 print(class_definition)
+                return
+            
+
+            out_directory = out_directory.strip('/')
+            filepath = f'{out_directory}/{table}.py'
+            if os.path.exists(filepath):
+                continue
+            with open(filepath, 'w') as f:
+                f.write(class_definition)
 
     @staticmethod
     def class_definition_from_table_name(table_name):
