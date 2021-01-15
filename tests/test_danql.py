@@ -71,6 +71,26 @@ class TestDanql(unittest.TestCase):
         gs_id = self.Breed.get_id(name='german shepard')
         self.assertEqual(gs_id, 1)
 
+    def test_row_set_intersection(self):
+        gs_id = self.Breed.create_record(name='german shepard')
+        aus_id = self.Breed.create_record(name='aussie shepard')
+        cbf_id = self.Owner.create_record(name='chef bobby flay')
+        bob_id = self.Owner.create_record(name='bob bobbers')
+        dog_list = [
+            dict(breed_id=aus_id, owner_id=cbf_id, name='jerry'),
+            dict(breed_id=gs_id, owner_id=cbf_id, name='garry'),
+            dict(breed_id=aus_id, owner_id=cbf_id, name='larry'),
+            dict(breed_id=gs_id, owner_id=bob_id, name='bob_dog')
+        ]
+        self.Dog.batch_insert(dog_list)
+        # Now get all dogs where breed=gs and owner!=cbf
+        gs_breed_dogs = self.Dog.read_record(breed_id=gs_id)
+        not_cbf = self.Dog.read_record(owner_id=cbf_id, not_equal=True)
+
+        intersection = gs_breed_dogs.intersection(not_cbf)
+        for row in intersection:
+            print(tuple(row))
+
 
 if __name__ == '__main__':
     unittest.main()

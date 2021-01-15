@@ -154,7 +154,7 @@ class Table:
     def read_record(self, not_equal=False, **kwargs):
         # return set(rows)
         columns, values = self.sanitize_kwargs(**kwargs)
-        col_val_pairs = self.column_equal_value(dict(zip(columns, values)))
+        col_val_pairs = self.column_equal_value(dict(zip(columns, values)), not_equal=not_equal)
         sql = "SELECT * FROM {0} WHERE {1}"
         sql = sql.format(self.table_name, col_val_pairs)
         logging.debug(sql)
