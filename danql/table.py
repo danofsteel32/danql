@@ -8,18 +8,68 @@ if os.getenv('DEBUG', None) is not None:
 
 class Table:
     """ Abstract database table class
-    Attributes:
 
-    Methods:
+    All attributes besides db_file and table_name are properties set on initialization
+    by querying the sqlite database with PRAGMA statements.
+    See https://www.sqlite.org/pragma.html for PRAGMA docs.
+
+    Attributes
+    ----------
+    db_file : str
+        sqlite database filepath
+    table_name : str
+        name of table in sqlite database
+    columns : dict
+        keys are column names, values are Column class
+    indexes : set
+        set of column names that are indexes or have unique constraint
+    primary_keys : set
+        set of column names that are primary_keys
+    parents : List[dict]
+        list of parent tables where each elem in list is dict
+        {'table': $parent_table_name, 'from': $this_table_column, 'to': $parent_table_column}
+    is_child : bool
+        whether or not this table is in a child relationship with another table
+    foreign_keys: set
+        set of column names that are foreign_keys
+
+    Methods
+    -------
+    check_column_args(column_args):
+        raises ValueError if column arguments are not column names on table
+    sanitize_kwargs(**kwargs):
+        transforms kwargs into sanitized lists of columns and values
+    create_record(**kwargs):
+        inserts a single row
+    read_record(not_equal=False, **kwargs):
+        gets all rows in table constructing WHERE clause from kwargs
+    update_record(rows, not_equal=False, **kwargs):
+        updates every row in rows to values in kwargs
+    delete_record(rows):
+        delete every row in rows
+    batch_insert(val_list):
+        much faster way of doing bulk inserts
+    total_rows():
+        get total number of rows in table
+    count_where(not_equal=False, **kwargs):
+        gets count of rows constructing WHERE clause from kwargs
+    raw_query(sqlfile):
+        load queries from a sqlfile too complex for basic CRUD methods
+    get_id(**kwargs):
+        get the id(s) of rows in table constructing WHERE clause from kwargs
+    column_equal_value(col_val_pairs, not_equal=False):
+        helper function for constructing WHERE clauses
+    properly_quoted(values):
+        helper function for sanitizing values before making queries
     """
     def __init__(self, table_name, columns={}, indexes=set(), parents=[], is_child=False, 
                  primary_keys=set(), foreign_keys=set(), db_file=None):
         self.db_file = db_file
         self.table_name = table_name
-        self.columns = columns # dict where keys are column names
+        self.columns = columns
         self.indexes = indexes
         self.primary_keys = primary_keys
-        self.parents = parents # parent_table, from_column, to_column
+        self.parents = parents
         self.is_child = is_child
         self.foreign_keys = foreign_keys
 
@@ -90,8 +140,6 @@ class Table:
     def foreign_keys(self):
         return self.__foreign_keys
     @foreign_keys.setter
-    # Nice to have quick reference on what cols are fks
-    # Don't have to unpack columns to access
     def foreign_keys(self, foreign_keys):
         if len(foreign_keys) > 0:
             return self.__foreign_keys
@@ -102,8 +150,6 @@ class Table:
         return self.__is_child
     @is_child.setter
     def is_child(self, is_child):
-        # If we have parent tables we are a child table
-        # TODO figure out some way to have a set of children tables like in parents
         if is_child:
             return self.__is_child
         if len(self.parents) > 0:
@@ -117,7 +163,6 @@ class Table:
         return True
 
     def sanitize_kwargs(self, **kwargs):
-        # No None
         columns = list(kwargs.keys())
         if self.check_column_args(columns):
             values = list(kwargs.values())
@@ -127,10 +172,6 @@ class Table:
                     del values[n]
             return columns, values
 
-    def questionable(self, columns):
-        question_marks = ('?' for c in columns)
-        return
-
     def create_record(self, **kwargs):
         # Return newly created row id (pk) or return 
         # existing row id if inserting those values raises
@@ -138,8 +179,7 @@ class Table:
         columns, values = self.sanitize_kwargs(**kwargs)
         columns = ','.join(columns)
         values = self.properly_quoted(values)
-        sql = "INSERT INTO {0} ({1}) VALUES ({2})"
-        sql = sql.format(self.table_name, columns, values)
+        sql = f"INSERT INTO {self.table_name} ({columns}) VALUES ({values})"
         logging.debug(sql)
         with Database(self.db_file) as db:
             new_row_id = db.insert(sql)
@@ -155,61 +195,56 @@ class Table:
         # return set(rows)
         columns, values = self.sanitize_kwargs(**kwargs)
         col_val_pairs = self.column_equal_value(dict(zip(columns, values)), not_equal=not_equal)
-        sql = "SELECT * FROM {0} WHERE {1}"
-        sql = sql.format(self.table_name, col_val_pairs)
+        sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
         logging.debug(sql)
         with Database(self.db_file) as db:
             results = db.query(sql)
         return results
-
 
     def update_record(self, rows, not_equal=False, **kwargs):
         # rows is set of rows to be updated
         # kwargs is col=val; col gets updated to val on $rows
         # returns set of updated rows
         if rows is None:
-            logging.debug('rows was None')
-            return None
+            raise ValueError("rows is required argument")
 
+        # Will raise ValueError if fails
         if self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
-            update_statements = []
-            select_statements = []
-            for row in rows:
-                for col in row.keys():
-                    if col in self.primary_keys:
-                        update_sql = "UPDATE {0} SET {1} WHERE {2}"
-                        where = self.column_equal_value({col: row[col]})
-                        update_sql = update_sql.format(self.table_name, col_val_pairs, where)
-                        select_sql = "SELECT * FROM {0} WHERE {1}"
-                        select_sql = select_sql.format(self.table_name, col_val_pairs)
-                        update_statements.append(update_sql)
-                        select_statements.append(select_sql)
+
+        update_statements = []
+        # TODO prettier way to do this
+        for row in rows:
+            for col in row.keys():
+                if col in self.primary_keys:
+                    where = self.column_equal_value({col: row[col]})
+                    update_sql = f"UPDATE {self.table_name} SET {col_val_pairs} WHERE {where}"
+                    update_statements.append(update_sql)
     
-            updated_rows = []
-            with Database(self.db_file) as db:
-                for statement in update_statements:
-                    logging.debug(statement)
-                    db.query(statement)
-                for statement in select_statements:
-                    logging.debug(statement)
-                    updated_rows.append(db.query(statement)[0])
-            return updated_rows
+        with Database(self.db_file) as db:
+            for statement in update_statements:
+                logging.debug(statement)
+                db.query(statement)
+
+            select_sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
+            logging.debug(select_sql)
+            updated_rows = db.query(select_sql)
+        return updated_rows
 
     def delete_record(self, rows):
         # rows is set of rows to be deleted
         # Returns number of rows deleted
         if rows is None:
-            logging.debug('rows was None')
-            return None
+            raise ValueError("rows is required argument")
+
         delete_statements = []
         for row in rows:
             for col in row.keys():
                 if col in self.primary_keys:
                     set_ = self.column_equal_value({col: row[col]})
-                    sql = "DELETE FROM {0} WHERE {1}"
-                    sql = sql.format(self.table_name, set_)
+                    sql = f"DELETE FROM {self.table_name} WHERE {set_}"
                     delete_statements.append(sql)
+
         before_count = self.total_rows()
         with Database(self.db_file) as db:
             for statement in delete_statements:
@@ -236,8 +271,7 @@ class Table:
                 for_insert.append('({0})'.format(self.properly_quoted(raw)))
 
             values = ','.join(for_insert)
-            sql = "INSERT INTO {0} ({1}) VALUES {2}"
-            batch_sql = sql.format(self.table_name, columns, values)
+            batch_sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
             logging.debug(batch_sql)
             before_count = self.total_rows()
             with Database(self.db_file) as db:
@@ -247,12 +281,11 @@ class Table:
                 logging.debug("Now inserting values one set at time as work around")
 
                 for values in for_insert:
-                    sql = "INSERT INTO {0} ({1}) VALUES {2}"
-                    sql = sql.format(self.table_name, columns, values)
+                    sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
                     logging.debug(sql)
                     with Database(self.db_file) as db:
                         if db.insert(sql) is None:
-                            logging.debug("VIOLATING VALUES {0}".format(values))
+                            logging.debug(f"VIOLATING VALUES {values}")
                     
             after_count = self.total_rows()
             row_delta = after_count - before_count
@@ -261,14 +294,14 @@ class Table:
     def total_rows(self):
         # Count of every row in tables
         with Database(self.db_file) as db:
-            count = db.query("SELECT count(*) FROM {0}".format(self.table_name))
+            count = db.query(f"SELECT count(*) FROM {self.table_name}")
         return count.pop()['count(*)']
 
     def count_where(self, not_equal=False, **kwargs):
         # when not_equal: WHERE col!=val instead of col=val
         if self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
-        sql = "SELECT count(*) FROM {0} WHERE {1}".format(self.table_name, col_val_pairs)
+        sql = f"SELECT count(*) FROM {self.table_name} WHERE {col_val_pairs}"
         logging.debug(sql)
         with Database(self.db_file) as db:
             count = db.query(sql)
@@ -286,8 +319,7 @@ class Table:
         if self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs)
 
-            sql = "SELECT id FROM {0} WHERE {1}"
-            sql = sql.format(self.table_name, col_val_pairs)
+            sql = f"SELECT id FROM {self.table_name} WHERE {col_val_pairs}"
             logging.debug(sql)
             with Database(self.db_file) as db:
                 results = db.query(sql)
@@ -300,17 +332,18 @@ class Table:
     def column_equal_value(self, col_val_pairs, not_equal=False):
         pairs = []
         for column in col_val_pairs:
+            value = self.properly_quoted(col_val_pairs[column])
             if not_equal:
-                pairs.append('{0}!={1}'.format(column, self.properly_quoted(col_val_pairs[column])))
+                pairs.append(f"{column}!={value}")
             else:
-                pairs.append('{0}={1}'.format(column, self.properly_quoted(col_val_pairs[column])))
+                pairs.append(f"{column}={value}")
         return ' AND '.join(pairs)
 
     @staticmethod
     def properly_quoted(values):
         def quoted(val):
             if type(val) == str:
-                return "'{0}'".format(val)
+                return f"'{val}'"
             elif type(val) == int or type(val) == float:
                 return str(val)
             elif type(val) == bool:
@@ -318,7 +351,7 @@ class Table:
                     return '1'
                 return '0'
             else:
-                raise ValueError('ERROR: unsupported type %s' % str(type(val)))
+                raise ValueError(f"ERROR: unsupported type {str(type(val))}")
         if type(values) == list:
             return ','.join(quoted(value) for value in values)
         return quoted(values)
