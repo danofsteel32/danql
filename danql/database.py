@@ -43,7 +43,9 @@ class Database:
             results = self.cur.fetchall()
         except Exception as e:
             raise e
-        return results
+        if len(results) > 0:
+            return set(results)
+        return set()
 
     def backup(self):
         backup_file = self.db_file + '.bak'

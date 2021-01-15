@@ -84,15 +84,13 @@ and then pass those rows as an argument to the update and delete methods.
 ## Goals
 * No dependencies outside of SQLite
 * Small, consistent, low complexity codebase
+* beautiful code
 
 ## Non-Goals
 * Competing with sqlalchemy or any other ORM
 * Supporting any database besides SQLite
 
 ## TODO
-* mypy and type hinting
-* primary keys can be named something else besides id in get\_id()
+* primary keys can be named something else besides id in `get_id()`
 * build more complex example
-* docstrings
-* Pretty up code
-* consolidate columns,values parsing into 1 function build\_query\_or\_fail
+* `create_tables` should never overwrite anything
