@@ -27,3 +27,4 @@ share/python-wheels/
 MANIFEST
 
 *.db
+tests/out/

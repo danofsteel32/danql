@@ -2,25 +2,27 @@ import glob
 import os
 import sys
 import unittest
-import shutil
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from danql import Database
 
 class TestDanql(unittest.TestCase):
-    def setUp(self):
-        self.db_file = 'tests/test.db'
-        self.out_dir = 'tests/out'
-        os.mkdir(self.out_dir)
-        Database(db_file=self.db_file).create_tables(sqlfile='tests/test_tables.sql', out_directory=self.out_dir)
-        from out import breed, dog, owner
-        self.Breed = breed.Breed(self.db_file)
-        self.Dog = dog.Dog(self.db_file)
-        self.Owner = owner.Owner(self.db_file)
+    db_file = 'tests/test.db'
+    out_dir = 'tests/out'
+    os.mkdir(out_dir)
+    Database(db_file=db_file).create_tables(sqlfile='tests/test_tables.sql', out_directory=out_dir)
+    from out import breed, dog, owner
+    Breed = breed.Breed(db_file)
+    Dog = dog.Dog(db_file)
+    Owner = owner.Owner(db_file)
+
+    #def setUp(self):
 
     def tearDown(self):
-        os.remove(self.db_file)
-        shutil.rmtree(self.out_dir)
+        with Database(self.db_file) as db:
+            db.query("DELETE FROM dog")
+            db.query("DELETE FROM owner")
+            db.query("DELETE FROM breed")
 
     def test_all_properties_on_table_class(self):
         print(self.Breed)
@@ -38,6 +40,7 @@ class TestDanql(unittest.TestCase):
         rows_created = self.Breed.batch_insert(val_list=val_list)
         self.assertEqual(rows_created, 2)
 
+    # .05s slowest test
     def test_batch_insert_multiple_columns_violate_constraint(self):
         gs_id = self.Breed.create_record(name='german shepard')
         aus_id = self.Breed.create_record(name='aussie shepard')
