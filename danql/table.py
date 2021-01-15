@@ -7,7 +7,10 @@ if os.getenv('DEBUG', None) is not None:
     logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 
 class Table:
-    """ Abstraction of a database table
+    """ Abstract database table class
+    Attributes:
+
+    Methods:
     """
     def __init__(self, table_name, columns={}, indexes=set(), parents=[], is_child=False, 
                  primary_keys=set(), foreign_keys=set(), db_file=None):
@@ -36,12 +39,9 @@ class Table:
         for col in schema:
             name = col['name']
             nullable = False if col['notnull'] else True
-            primary_key = True if col['pk'] else False
-            column = Column(name=name,
-                            type=col['type'],
-                            nullable=nullable,
-                            default_value=col['dflt_value'],
-                            primary_key=primary_key)
+            pk = True if col['pk'] else False
+            column = Column(name=name, type=col['type'], nullable=nullable, 
+                            default_value=col['dflt_value'], primary_key=pk)
             to_set[name] = column
         self.__columns = to_set
 
@@ -56,13 +56,9 @@ class Table:
 
         indexes = set()
         with Database(self.db_file) as db:
-            index_list = db.query("PRAGMA index_list(%s)" % (self.table_name,))
-            if index_list is not None:
-                for index in index_list:
-                    # TODO separate unique and non-unique indexes
-                    index_info = db.query("PRAGMA index_info(%s)" % (index['name']))
-                    for i in index_info:
-                        indexes.add(i['name'])
+            index_list = db.query(f"PRAGMA index_list({self.table_name})")
+            index_info = [db.query(f"PRAGMA index_info({i['name']})") for i in index_list]
+            [indexes.add(idx['name']) for row in index_info for idx in row if len(index_info) > 0]
         self.__indexes = indexes
 
     @property
@@ -72,10 +68,7 @@ class Table:
     def primary_keys(self, primary_keys):
         if len(primary_keys) > 0:
             return self.__primary_keys
-        pks = set()
-        for col in self.columns:
-            if self.columns[col].primary_key:
-                pks.add(col)
+        pks = set([col for col in self.columns if self.columns[col].primary_key])
         self.__primary_keys = pks
 
     @property
@@ -86,13 +79,12 @@ class Table:
         if len(parents) > 0:
             return self.__parents
         with Database(self.db_file) as db:
-            fks = db.query("PRAGMA foreign_key_list(%s)" % (self.table_name,))
-        parents_list = []
-        if fks is not None:
-            for fk in fks:
-                p = {'table': fk['table'], 'from': fk['from'], 'to': fk['to']}
-                parents_list.append(p)
-        self.__parents = parents_list
+            fks = db.query(f"PRAGMA foreign_key_list({self.table_name})")
+        if len(fks) > 0:
+            parents_list = [{'table': fk['table'], 'from': fk['from'], 'to': fk['to']} for fk in fks]
+            self.__parents = parents_list
+        else:
+            self.__parents = parents
 
     @property
     def foreign_keys(self):
@@ -118,12 +110,10 @@ class Table:
             self.__is_child = True
 
     def check_column_args(self, column_args):
-        columns = self.columns.keys()
         for col in column_args:
             if col not in self.columns:
-                logging.debug(self.columns)
-                error_msg = 'Column {0} is not a valid column on table {1}'
-                raise ValueError(error_msg.format(col, self.table_name))
+                error_msg = f'Column {col} is not a valid column on table {self.table_name}'
+                raise ValueError(error_msg)
         return True
 
     def sanitize_kwargs(self, **kwargs):
@@ -136,6 +126,10 @@ class Table:
                     del columns[n]
                     del values[n]
             return columns, values
+
+    def questionable(self, columns):
+        question_marks = ('?' for c in columns)
+        return
 
     def create_record(self, **kwargs):
         # Return newly created row id (pk) or return 
@@ -154,14 +148,11 @@ class Table:
                 columns, values = self.sanitize_kwargs(**kwargs)
                 col_val_zipped = dict(zip(columns, values))
                 existing_row_id = self.get_id(**col_val_zipped)
-                if existing_row_id is None:
-                    # 99% sure This should never happen but
-                    raise Exception('WTF create_record')
                 return existing_row_id
             return new_row_id
 
     def read_record(self, not_equal=False, **kwargs):
-        # return List
+        # return set(rows)
         columns, values = self.sanitize_kwargs(**kwargs)
         col_val_pairs = self.column_equal_value(dict(zip(columns, values)))
         sql = "SELECT * FROM {0} WHERE {1}"
@@ -173,9 +164,9 @@ class Table:
 
 
     def update_record(self, rows, not_equal=False, **kwargs):
-        # rows is list of rows to be updated
+        # rows is set of rows to be updated
         # kwargs is col=val; col gets updated to val on $rows
-        # returns list of updated rows
+        # returns set of updated rows
         if rows is None:
             logging.debug('rows was None')
             return None
@@ -206,7 +197,7 @@ class Table:
             return updated_rows
 
     def delete_record(self, rows):
-        # rows is list of rows to be deleted
+        # rows is set of rows to be deleted
         # Returns number of rows deleted
         if rows is None:
             logging.debug('rows was None')
@@ -271,7 +262,7 @@ class Table:
         # Count of every row in tables
         with Database(self.db_file) as db:
             count = db.query("SELECT count(*) FROM {0}".format(self.table_name))
-        return count[0][0]
+        return count.pop()['count(*)']
 
     def count_where(self, not_equal=False, **kwargs):
         # when not_equal: WHERE col!=val instead of col=val
@@ -281,7 +272,7 @@ class Table:
         logging.debug(sql)
         with Database(self.db_file) as db:
             count = db.query(sql)
-        return count[0][0]
+        return count.pop()['count(*)']
 
     def raw_query(self, sqlfile):
         # Load query from a sqlfile
@@ -291,6 +282,7 @@ class Table:
 
     def get_id(self, **kwargs):
         # Just want the id of some row(s)
+        # Returns id, set(ids), or None if does not exist
         if self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs)
 
@@ -299,9 +291,11 @@ class Table:
             logging.debug(sql)
             with Database(self.db_file) as db:
                 results = db.query(sql)
-                if len(results) > 0:
-                    return results[0]['id']
+            if len(results) < 1:
                 return None
+            elif len(results) == 1:
+                return results.pop()['id']
+            return set([row['id'] for row in results])
     
     def column_equal_value(self, col_val_pairs, not_equal=False):
         pairs = []

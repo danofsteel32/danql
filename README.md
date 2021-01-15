@@ -90,8 +90,9 @@ and then pass those rows as an argument to the update and delete methods.
 * Supporting any database besides SQLite
 
 ## TODO
-* Tests use unittest
-* More tests
 * mypy and type hinting
 * primary keys can be named something else besides id in get\_id()
-* print SQL statements and warnings only if DEBUG
+* build more complex example
+* docstrings
+* Pretty up code
+* consolidate columns,values parsing into 1 function build\_query\_or\_fail

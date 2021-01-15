@@ -16,15 +16,16 @@ class Database:
 
     def query(self, sql):
         # Return List[sqlite3.Row] or List[]
+        # What changes if return set()
         try:
             self.cur.execute(sql)
             results = self.cur.fetchall()
         except Exception as e:
             raise e
         if len(results) > 0:
-            return results
+            return set(results)
         else:
-            return []
+            return set()
 
     def insert(self, sql):
         # Return row_id of created row or None if row already exists
