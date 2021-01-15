@@ -88,8 +88,12 @@ class TestDanql(unittest.TestCase):
         not_cbf = self.Dog.read_record(owner_id=cbf_id, not_equal=True)
 
         intersection = gs_breed_dogs.intersection(not_cbf)
-        for row in intersection:
-            print(tuple(row))
+        self.assertEqual((4, 1, 2, 'bob_dog'), tuple(intersection.pop()))
+
+    def test_sql_injection(self):
+        gs_id = self.Breed.create_record(name='german shepard')
+        sql_injection = self.Breed.create_record(name='DROP TABLE breed;')
+        self.Breed.read_record(name='german shepard')
 
 
 if __name__ == '__main__':
