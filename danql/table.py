@@ -183,13 +183,14 @@ class Table:
         logging.debug(sql)
         with Database(self.db_file) as db:
             new_row_id = db.insert(sql)
-            if new_row_id is None:
-                logging.debug('Row already exists')
-                columns, values = self.sanitize_kwargs(**kwargs)
-                col_val_zipped = dict(zip(columns, values))
-                existing_row_id = self.get_id(**col_val_zipped)
-                return existing_row_id
+        if new_row_id is not None:
             return new_row_id
+
+        logging.debug('Row already exists')
+        columns, values = self.sanitize_kwargs(**kwargs)
+        col_val_zipped = dict(zip(columns, values))
+        existing_row_id = self.get_id(**col_val_zipped)
+        return existing_row_id
 
     def read_record(self, not_equal=False, **kwargs):
         # return set(rows)
@@ -209,8 +210,8 @@ class Table:
             raise ValueError("rows is required argument")
 
         # Will raise ValueError if fails
-        if self.check_column_args(kwargs.keys()):
-            col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
+        self.check_column_args(kwargs.keys())
+        col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
 
         update_statements = []
         # TODO prettier way to do this
@@ -226,6 +227,7 @@ class Table:
                 logging.debug(statement)
                 db.query(statement)
 
+        with Database(self.db_file) as db:
             select_sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
             logging.debug(select_sql)
             updated_rows = db.query(select_sql)
@@ -262,34 +264,36 @@ class Table:
         # at a time with create_record() (Worst Case)
         # Returns number of rows created
         columns = val_list[0].keys()
-        if self.check_column_args(columns):
-            columns = ','.join(list(columns))
-        
-            for_insert = []
-            for val in val_list:
-                raw = list(val.values())
-                for_insert.append('({0})'.format(self.properly_quoted(raw)))
+        self.check_column_args(columns)
+        columns = ','.join(list(columns))
+       
+        for_insert = []
+        for val in val_list:
+            raw = list(val.values())
+            for_insert.append(f"({self.properly_quoted(raw)})")
 
-            values = ','.join(for_insert)
-            batch_sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
-            logging.debug(batch_sql)
-            before_count = self.total_rows()
-            with Database(self.db_file) as db:
-                inserted = db.insert(batch_sql)
-            if inserted is None:
-                logging.debug("Your values violated uniqueness constraints")
-                logging.debug("Now inserting values one set at time as work around")
-
-                for values in for_insert:
-                    sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
-                    logging.debug(sql)
-                    with Database(self.db_file) as db:
-                        if db.insert(sql) is None:
-                            logging.debug(f"VIOLATING VALUES {values}")
-                    
+        values = ','.join(for_insert)
+        batch_sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
+        logging.debug(batch_sql)
+        before_count = self.total_rows()
+        with Database(self.db_file) as db:
+            inserted = db.insert(batch_sql)
+        if inserted is not None:
             after_count = self.total_rows()
             row_delta = after_count - before_count
             return row_delta
+        logging.debug("Your values violated uniqueness constraints")
+        logging.debug("Now inserting values one set at time as work around")
+
+        with Database(self.db_file) as db:
+            for values in for_insert:
+                sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
+                logging.debug(sql)
+                if db.insert(sql) is None:
+                    logging.debug(f"VIOLATING VALUES {values}")
+        after_count = self.total_rows()
+        row_delta = after_count - before_count
+        return row_delta
 
     def total_rows(self):
         # Count of every row in tables
