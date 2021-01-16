@@ -311,10 +311,15 @@ class Table:
             count = db.query(sql)
         return count.pop()['count(*)']
 
-    def raw_query(self, sqlfile):
+    def sqlfile_query(self, sqlfile):
         # Load query from a sqlfile
         with Database(self.db_file) as db:
             results = db.from_sqlfile(sqlfile)
+        return results
+
+    def raw_query(self, sql):
+        with Database(self.db_file) as db:
+            results = db.query(sql)
         return results
 
     def get_id(self, **kwargs):

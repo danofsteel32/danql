@@ -98,9 +98,12 @@ class TestDanql(unittest.TestCase):
         sql_injection = self.Breed.create_record(name='DROP TABLE breed;')
         self.Breed.read_record(name='german shepherd')
 
-    def test_raw_query_from_sqlfile(self):
+    def test_sqlfile_query(self):
         self.Breed.create_record(name='german shepherd')
-        results = self.Breed.raw_query(sqlfile='tests/sql/get_breeds.sql')
+        results = self.Breed.sqlfile_query(sqlfile='tests/sql/get_breeds.sql')
+
+    def test_raw_query(self):
+        self.Breed.raw_query("SELECT * FROM breed")
 
 if __name__ == '__main__':
     unittest.main()

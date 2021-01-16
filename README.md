@@ -84,12 +84,13 @@ and then pass those rows as an argument to the update and delete methods.
 ## Goals
 * No dependencies outside of SQLite
 * Small, consistent, low complexity codebase
-* beautiful code
+* Beautiful code
 
 ## Non-Goals
 * Competing with sqlalchemy or any other ORM
 * Supporting any database besides SQLite
 
 ## TODO
-* primary keys can be named something else besides id in `get_id()`
-* build fully fleshed out example
+* Some way of getting ids inserted by `batch_insert()`
+* Primary keys can be named something else besides id in `get_id()`
+* Build fully fleshed out example
