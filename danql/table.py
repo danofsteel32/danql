@@ -316,18 +316,21 @@ class Table:
     def get_id(self, **kwargs):
         # Just want the id of some row(s)
         # Returns id, set(ids), or None if does not exist
-        if self.check_column_args(kwargs.keys()):
+        if kwargs == {}:
+            sql = f"SELECT id FROM {self.table_name}"
+        elif self.check_column_args(kwargs.keys()):
             col_val_pairs = self.column_equal_value(kwargs)
-
             sql = f"SELECT id FROM {self.table_name} WHERE {col_val_pairs}"
-            logging.debug(sql)
-            with Database(self.db_file) as db:
-                results = db.query(sql)
-            if len(results) < 1:
-                return None
-            elif len(results) == 1:
-                return results.pop()['id']
-            return set([row['id'] for row in results])
+
+        logging.debug(kwargs)
+        logging.debug(sql)
+        with Database(self.db_file) as db:
+            results = db.query(sql)
+        if len(results) < 1:
+            return None
+        elif len(results) == 1:
+            return results.pop()['id']
+        return set([row['id'] for row in results])
     
     def column_equal_value(self, col_val_pairs, not_equal=False):
         pairs = []
