@@ -73,7 +73,6 @@ class Database:
             if out_directory is None:
                 print(class_definition)
                 return
-            
 
             out_directory = out_directory.strip('/')
             filepath = f'{out_directory}/{table}.py'
@@ -81,6 +80,8 @@ class Database:
                 continue
             with open(filepath, 'w') as f:
                 f.write(class_definition)
+            with open(f'{out_directory}/__init__.py', 'a') as f:
+                f.write(f'from .{table} import {table.capitalize()}\n')
 
     @staticmethod
     def class_definition_from_table_name(table_name):
