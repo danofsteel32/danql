@@ -79,8 +79,6 @@ class Database:
             with open(filepath, 'w') as f:
                 f.write(class_definition)
             init_dot_py = f'{out_directory}/__init__.py'
-            if os.path.exists(init_dot_py):
-                continue
             with open(init_dot_py, 'a') as f:
                 f.write(f'from .{table} import {table.capitalize()}\n')
 
