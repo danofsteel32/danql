@@ -9,7 +9,7 @@ if os.getenv('DEBUG', None) is not None:
 class Table:
     """ Abstract database table class
 
-    All attributes besides db_file and table_name are properties set on initialization
+    All attributes besides db_file and table_name are properties set on init
     by querying the sqlite database with PRAGMA statements.
     See https://www.sqlite.org/pragma.html for PRAGMA docs.
 
@@ -26,8 +26,7 @@ class Table:
     primary_keys : set
         set of column names that are primary_keys
     parents : List[dict]
-        list of parent tables where each elem in list is dict
-        {'table': $parent_table_name, 'from': $this_table_column, 'to': $parent_table_column}
+        list of parent tables and column relationships
     is_child : bool
         whether or not this table is in a child relationship with another table
     foreign_keys: set
@@ -62,16 +61,19 @@ class Table:
     properly_quoted(values):
         helper function for sanitizing values before making queries
     """
-    def __init__(self, table_name, columns={}, indexes=set(), parents=[], is_child=False, 
-                 primary_keys=set(), foreign_keys=set(), db_file=None):
+
+    def __init__(self, table_name, columns={}, db_file=None,
+                 indexes=set(), primary_keys=set(), foreign_keys=set(),
+                 parents=[], is_child=False):
+
         self.db_file = db_file
         self.table_name = table_name
         self.columns = columns
         self.indexes = indexes
         self.primary_keys = primary_keys
         self.parents = parents
-        self.is_child = is_child
         self.foreign_keys = foreign_keys
+        self.is_child = is_child
 
     @property
     def columns(self):
@@ -90,8 +92,15 @@ class Table:
             name = col['name']
             nullable = False if col['notnull'] else True
             pk = True if col['pk'] else False
-            column = Column(name=name, type=col['type'], nullable=nullable, 
-                            default_value=col['dflt_value'], primary_key=pk)
+
+            column = Column(
+                name=name,
+                type=col['type'],
+                nullable=nullable,
+                default_value=col['dflt_value'],
+                primary_key=pk
+            )
+
             to_set[name] = column
         self.__columns = to_set
 
@@ -104,12 +113,17 @@ class Table:
         if len(indexes) > 0:
             return self.__indexes
 
-        indexes = set()
         with Database(self.db_file) as db:
-            index_list = db.query(f"PRAGMA index_list({self.table_name})")
-            index_info = [db.query(f"PRAGMA index_info({i['name']})") for i in index_list]
-            [indexes.add(idx['name']) for row in index_info for idx in row if len(index_info) > 0]
-        self.__indexes = indexes
+            index_info = [
+                db.query(f"PRAGMA index_info({i['name']})")
+                for i in db.query(f"PRAGMA index_list({self.table_name})")
+            ]
+        indexed_columns = [
+            idx['name'] for row in index_info
+            for idx in row
+            if len(index_info) > 0
+        ]
+        self.__indexes = set(indexed_columns)
 
     @property
     def primary_keys(self):
@@ -118,8 +132,8 @@ class Table:
     def primary_keys(self, primary_keys):
         if len(primary_keys) > 0:
             return self.__primary_keys
-        pks = set([col for col in self.columns if self.columns[col].primary_key])
-        self.__primary_keys = pks
+        pks = [col for col in self.columns if self.columns[col].primary_key]
+        self.__primary_keys = set(pks)
 
     @property
     def parents(self):
@@ -131,8 +145,7 @@ class Table:
         with Database(self.db_file) as db:
             fks = db.query(f"PRAGMA foreign_key_list({self.table_name})")
         if len(fks) > 0:
-            parents_list = [{'table': fk['table'], 'from': fk['from'], 'to': fk['to']} for fk in fks]
-            self.__parents = parents_list
+            self.__parents = [dict(fk) for fk in fks]
         else:
             self.__parents = parents
 
@@ -158,7 +171,7 @@ class Table:
     def check_column_args(self, column_args):
         for col in column_args:
             if col not in self.columns:
-                error_msg = f'Column {col} is not a valid column on table {self.table_name}'
+                error_msg = f'{col} is not a valid column on {self.table_name}'
                 raise ValueError(error_msg)
         return True
 
@@ -195,7 +208,8 @@ class Table:
     def read_record(self, not_equal=False, **kwargs):
         # return set(rows)
         columns, values = self.sanitize_kwargs(**kwargs)
-        col_val_pairs = self.column_equal_value(dict(zip(columns, values)), not_equal=not_equal)
+        repacked = dict(zip(columns, values))
+        col_val_pairs = self.column_equal_value(repacked, not_equal=not_equal)
         sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
         logging.debug(sql)
         with Database(self.db_file) as db:
@@ -209,26 +223,20 @@ class Table:
         if rows is None:
             raise ValueError("rows is required argument")
 
-        # Will raise ValueError if fails
         self.check_column_args(kwargs.keys())
         col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
-
-        update_statements = []
-        pks = [col for col in row.keys() for row in rows if col in self.primary_keys]
-        for pk in pks:
-            where = self.column_equal_value({col: row[col]})
-            update_sql = f"UPDATE {self.table_name} SET {col_val_pairs} WHERE {where}"
-            update_statements.append(update_sql)
-    
+        update_statements = [
+            f"UPDATE {self.table_name} SET {col_val_pairs} WHERE id={pk}"
+            for pk in self.primary_keys_from_rows(rows)
+        ]
         with Database(self.db_file) as db:
             for statement in update_statements:
                 logging.debug(statement)
                 db.query(statement)
-
         with Database(self.db_file) as db:
-            select_sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
-            logging.debug(select_sql)
-            updated_rows = db.query(select_sql)
+            sql = f"SELECT * FROM {self.table_name} WHERE {col_val_pairs}"
+            logging.debug(sql)
+            updated_rows = db.query(sql)
         return updated_rows
 
     def delete_record(self, rows):
@@ -237,22 +245,27 @@ class Table:
         if rows is None:
             raise ValueError("rows is required argument")
 
-        delete_statements = []
-        pks = [col for col in row.keys() for row in rows if col in self.primary_keys]
-        for pk in pks:
-            where = self.column_equal_value({col: row[col]})
-            sql = f"DELETE FROM {self.table_name} WHERE {where}"
-            delete_statements.append(sql)
-
+        delete_statements = [
+            f"DELETE FROM {self.table_name} WHERE id={pk}"
+            for pk in self.primary_keys_from_rows(rows)
+        ]
         before_count = self.total_rows()
         with Database(self.db_file) as db:
             for statement in delete_statements:
                 logging.debug(statement)
-                db.query(sql)
+                db.query(statement)
         after_count = self.total_rows()
         row_delta = before_count - after_count
-
         return row_delta
+
+    def primary_keys_from_rows(self, rows):
+        pk_columns = [
+            column
+            for column in rows[0].keys()
+            if column in self.primary_keys
+        ]
+        pks = [row[column] for row in rows for column in pk_columns]
+        return pks
 
     def batch_insert(self, val_list):
         # val_list is List[dict]
@@ -269,7 +282,6 @@ class Table:
         for val in val_list:
             raw = list(val.values())
             for_insert.append(f"({self.properly_quoted(raw)})")
-
         values = ','.join(for_insert)
         batch_sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
         logging.debug(batch_sql)

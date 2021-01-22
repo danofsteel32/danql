@@ -74,6 +74,18 @@ class TestDanql(unittest.TestCase):
         gs_id = self.Breed.get_id(name='german shepherd')
         self.assertEqual(gs_id, 1)
 
+    def test_update_record(self):
+        self.Breed.create_record(name='german shepherd')
+        rows = self.Breed.read_record(name='german shepherd')
+        new_rows = self.Breed.update_record(rows=rows, name='austrian shepherd')
+        self.assertEqual(len(new_rows), 1)
+
+    def test_delete_record(self):
+        self.Breed.create_record(name='german shepherd')
+        rows = self.Breed.read_record(name='german shepherd')
+        deleted = self.Breed.delete_record(rows=rows)
+        self.assertEqual(deleted, 1)
+
     def test_row_set_intersection(self):
         gs_id = self.Breed.create_record(name='german shepherd')
         aus_id = self.Breed.create_record(name='aussie shepherd')
