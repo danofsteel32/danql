@@ -16,16 +16,15 @@ class Database:
 
     def query(self, sql):
         # Return List[sqlite3.Row] or List[]
-        # What changes if return set()
         try:
             self.cur.execute(sql)
             results = self.cur.fetchall()
         except Exception as e:
             raise e
         if len(results) > 0:
-            return set(results)
+            return results
         else:
-            return set()
+            return []
 
     def insert(self, sql):
         # Return row_id of created row or None if row already exists
@@ -36,7 +35,6 @@ class Database:
             return None
 
     def from_sqlfile(self, sqlfile):
-        # TODO Figure out how to handle the different return types
         try:
             with open(sqlfile, 'r') as f:
                 self.cur.executescript(f.read())
@@ -44,8 +42,8 @@ class Database:
         except Exception as e:
             raise e
         if len(results) > 0:
-            return set(results)
-        return set()
+            return results
+        return []
 
     def backup(self):
         backup_file = self.db_file + '.bak'
@@ -80,7 +78,10 @@ class Database:
                 continue
             with open(filepath, 'w') as f:
                 f.write(class_definition)
-            with open(f'{out_directory}/__init__.py', 'a') as f:
+            init_dot_py = f'{out_directory}/__init__.py'
+            if os.path.exists(init_dot_py):
+                continue
+            with open(init_dot_py, 'a') as f:
                 f.write(f'from .{table} import {table.capitalize()}\n')
 
     @staticmethod

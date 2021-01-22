@@ -205,7 +205,7 @@ class Table:
     def update_record(self, rows, not_equal=False, **kwargs):
         # rows is set of rows to be updated
         # kwargs is col=val; col gets updated to val on $rows
-        # returns set of updated rows
+        # returns list of updated rows
         if rows is None:
             raise ValueError("rows is required argument")
 
@@ -214,13 +214,11 @@ class Table:
         col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
 
         update_statements = []
-        # TODO prettier way to do this
-        for row in rows:
-            for col in row.keys():
-                if col in self.primary_keys:
-                    where = self.column_equal_value({col: row[col]})
-                    update_sql = f"UPDATE {self.table_name} SET {col_val_pairs} WHERE {where}"
-                    update_statements.append(update_sql)
+        pks = [col for col in row.keys() for row in rows if col in self.primary_keys]
+        for pk in pks:
+            where = self.column_equal_value({col: row[col]})
+            update_sql = f"UPDATE {self.table_name} SET {col_val_pairs} WHERE {where}"
+            update_statements.append(update_sql)
     
         with Database(self.db_file) as db:
             for statement in update_statements:
@@ -240,12 +238,11 @@ class Table:
             raise ValueError("rows is required argument")
 
         delete_statements = []
-        for row in rows:
-            for col in row.keys():
-                if col in self.primary_keys:
-                    set_ = self.column_equal_value({col: row[col]})
-                    sql = f"DELETE FROM {self.table_name} WHERE {set_}"
-                    delete_statements.append(sql)
+        pks = [col for col in row.keys() for row in rows if col in self.primary_keys]
+        for pk in pks:
+            where = self.column_equal_value({col: row[col]})
+            sql = f"DELETE FROM {self.table_name} WHERE {where}"
+            delete_statements.append(sql)
 
         before_count = self.total_rows()
         with Database(self.db_file) as db:
@@ -254,6 +251,7 @@ class Table:
                 db.query(sql)
         after_count = self.total_rows()
         row_delta = before_count - after_count
+
         return row_delta
 
     def batch_insert(self, val_list):
@@ -290,7 +288,7 @@ class Table:
                 sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
                 logging.debug(sql)
                 if db.insert(sql) is None:
-                    logging.debug(f"VIOLATING VALUES {values}")
+                    logging.debug(f"Violating values {values}")
         after_count = self.total_rows()
         row_delta = after_count - before_count
         return row_delta
@@ -365,7 +363,7 @@ class Table:
                     return '1'
                 return '0'
             else:
-                raise ValueError(f"ERROR: unsupported type {str(type(val))}")
+                raise ValueError(f"Unsupported type {str(type(val))}")
         if type(values) == list:
             return ','.join(quoted(value) for value in values)
         return quoted(values)
@@ -375,7 +373,7 @@ class Table:
 
     def __str__(self):
         # This is pretty cancerous but its string building what do you expect
-        # Only needed to pretty logging.debug table schema
+        # Only needed to pretty print table schema
         cols = ['  {0}\n'.format(col.__str__()) for col in self.columns.values()]
         c = ''.join(cols)
         parents = ['  Parent(table={0} from={1} to={2})\n'.format(p['table'], p['from'], p['to']) for p in self.parents]
