@@ -50,12 +50,13 @@ class Database:
         backup_file = self.db_file + '.bak'
         self.query(f"VACUUM main INTO {backup_file}")
 
-    def create_tables(self, sqlfile, out_directory=None):
+    def create_tables(self, sqlfiles, out_directory=None):
         # Create all tables in sqlfile and then create classes from them
-        try:
-            self.from_sqlfile(sqlfile)
-        except Exception as e:
-            raise e
+        for sqlfile in sqlfiles:
+            try:
+                self.from_sqlfile(sqlfile)
+            except Exception as e:
+                raise e
         tables = self.query(
             """
             SELECT 
