@@ -35,6 +35,7 @@ class Database:
             return None
 
     def from_sqlfile(self, sqlfile):
+        # Return List[sqlite3.Row] or List[]
         try:
             with open(sqlfile, 'r') as f:
                 self.cur.executescript(f.read())
@@ -47,7 +48,7 @@ class Database:
 
     def backup(self):
         backup_file = self.db_file + '.bak'
-        self.query("VACUUM main INTO ?", (backup_file,))
+        self.query(f"VACUUM main INTO {backup_file}")
 
     def create_tables(self, sqlfile, out_directory=None):
         # Create all tables in sqlfile and then create classes from them

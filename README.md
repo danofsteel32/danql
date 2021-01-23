@@ -21,7 +21,7 @@ make test
 ```
 ### Installation
 ``` sh
-pip install -e .
+make install
 ```
 ### Usage
 Define your table(s) in a regular sql file. I usually just call it `tables.sql`.

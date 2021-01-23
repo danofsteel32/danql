@@ -259,7 +259,7 @@ class Table:
         ]
         pks = [row[column] for row in rows for column in pk_columns]
         y = itertools.product(pk_columns, pks)
-        return [self.column_equal_value({z[0]: z[1]}) for z in y ]
+        return [self.column_equal_value({z[0]: z[1]}) for z in y]
 
     def total_rows(self):
         # Count of every row in tables

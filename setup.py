@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setuptools.setup(
     name='danql-danofsteel32',
-    version='0.0.1',
+    version='0.0.2',
     author='Dan Davis',
     author_email='dan@chamberlainbuildersllc.om',
     description='ORM-lite library for SQLite',
