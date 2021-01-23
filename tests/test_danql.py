@@ -58,6 +58,13 @@ class TestDanql(unittest.TestCase):
         deleted = self.Breed.delete_record(rows=rows)
         self.assertEqual(deleted, 1)
 
+    def test_composite_primary_key(self):
+        gs_id = self.Breed.create_record(name='german shepherd')
+        cbf_id = self.Owner.create_record(name='chef bobby flay')
+        composite_key = self.Dog.create_record(breed_id=gs_id, owner_id=cbf_id, name='fido')
+        composite_key2 = self.Dog.create_record(breed_id=gs_id, owner_id=cbf_id, name='fido')
+        print(composite_key, composite_key2)
+
     def test_sql_injection(self):
         gs_id = self.Breed.create_record(name='german shepherd')
         sql_injection = self.Breed.create_record(name='DROP TABLE breed;')

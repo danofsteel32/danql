@@ -24,21 +24,15 @@ class Table:
         keys are column names, values are Column class
     indexes : set
         set of column names that are indexes or have unique constraint
-    primary_keys : set
-        set of column names that are primary_keys
+    primary_keys : List[str]
+        list of column names that are primary_keys
     parents : List[dict]
         list of parent tables and column relationships
-    is_child : bool
-        whether or not this table is in a child relationship with another table
     foreign_keys: set
         set of column names that are foreign_keys
 
     Methods
     -------
-    check_column_args(column_args):
-        raises ValueError if column arguments are not column names on table
-    sanitize_kwargs(**kwargs):
-        transforms kwargs into sanitized lists of columns and values
     create_record(**kwargs):
         inserts a single row
     read_record(not_equal=False, **kwargs):
@@ -47,25 +41,28 @@ class Table:
         updates every row in rows to values in kwargs
     delete_record(rows):
         delete every row in rows
-    batch_insert(val_list):
-        much faster way of doing bulk inserts
+    check_column_args(column_args):
+        raises ValueError if column arguments are not column names on table
+    sanitize_kwargs(**kwargs):
+        transforms kwargs into sanitized lists of columns and values
+    primary_keys_from_rows(rows)
+        used by update_record and delete_record
     total_rows():
         get total number of rows in table
     count_where(not_equal=False, **kwargs):
         gets count of rows constructing WHERE clause from kwargs
-    raw_query(sqlfile):
+    sqlfile_query(sqlfile):
         load queries from a sqlfile too complex for basic CRUD methods
-    get_id(**kwargs):
-        get the id(s) of rows in table constructing WHERE clause from kwargs
+    raw_query(sql):
+        execute arbitrary sql statement
     column_equal_value(col_val_pairs, not_equal=False):
         helper function for constructing WHERE clauses
     properly_quoted(values):
         helper function for sanitizing values before making queries
     """
 
-    def __init__(self, table_name, columns={}, db_file=None,
-                 indexes=set(), primary_keys=[], foreign_keys=set(),
-                 parents=[], is_child=False):
+    def __init__(self, table_name, columns={}, db_file=None, indexes=set(),
+                 primary_keys=[], foreign_keys=set(), parents=[]):
 
         self.db_file = db_file
         self.table_name = table_name
@@ -74,7 +71,6 @@ class Table:
         self.primary_keys = primary_keys
         self.parents = parents
         self.foreign_keys = foreign_keys
-        self.is_child = is_child
 
     @property
     def columns(self):
@@ -93,7 +89,6 @@ class Table:
                 name = col['name']
                 nullable = False if col['notnull'] else True
                 pk = True if col['pk'] else False
-
                 column = Column(
                     name=name,
                     type=col['type'],
@@ -101,7 +96,6 @@ class Table:
                     default_value=col['dflt_value'],
                     primary_key=pk
                 )
-
                 to_set[name] = column
             self.__columns = to_set
 
@@ -162,36 +156,10 @@ class Table:
         else:
             self.__foreign_keys = set([parent['from'] for parent in self.parents])
 
-    @property
-    def is_child(self):
-        return self.__is_child
-    @is_child.setter
-    def is_child(self, is_child):
-        if len(self.parents) > 0:
-            self.__is_child = True
-        else:
-            self.__is_child = False
-
-    def check_column_args(self, column_args):
-        for col in column_args:
-            if col not in self.columns:
-                error_msg = f'{col} is not a valid column on {self.table_name}'
-                raise ValueError(error_msg)
-        return True
-
-    def sanitize_kwargs(self, **kwargs):
-        columns = list(kwargs.keys())
-        if self.check_column_args(columns):
-            values = list(kwargs.values())
-            for n, v in enumerate(values):
-                if v is None:
-                    del columns[n]
-                    del values[n]
-            return columns, values
-
     def create_record(self, **kwargs):
-        # Return newly created row id (pk) or return 
-        # existing row id if inserting those values raises
+        # Return newly created row_id/pk
+        # or return existing row_id/pk of those values
+        # if inserting those values raises
         # a sqlite3.IntegrityError (violated unique constraint)
         columns, values = self.sanitize_kwargs(**kwargs)
         columns = ','.join(columns)
@@ -204,12 +172,15 @@ class Table:
             return new_row_id
 
         logging.debug('Row already exists')
-        existing_row_id = self.read_record(**kwargs)
-        # TODO Check for len(primary_keys)
-        return existing_row_id[0][self.primary_keys[0]]
+        existing_row = self.read_record(**kwargs)[0]
+        existing_row_id = [existing_row[x] for x in self.primary_keys]
+        if len(existing_row_id) > 1:
+            return tuple(existing_row_id)
+        elif len(existing_row_id) == 1:
+            return existing_row_id[0]
 
     def read_record(self, not_equal=False, **kwargs):
-        # return set(rows)
+        # return List[rows] or empty List if no rows
         columns, values = self.sanitize_kwargs(**kwargs)
         repacked = dict(zip(columns, values))
         col_val_pairs = self.column_equal_value(repacked, not_equal=not_equal)
@@ -263,6 +234,23 @@ class Table:
         row_delta = before_count - after_count
         return row_delta
 
+    def check_column_args(self, column_args):
+        for col in column_args:
+            if col not in self.columns:
+                error_msg = f'{col} is not a valid column on {self.table_name}'
+                raise ValueError(error_msg)
+        return True
+
+    def sanitize_kwargs(self, **kwargs):
+        columns = list(kwargs.keys())
+        if self.check_column_args(columns):
+            values = list(kwargs.values())
+            for n, v in enumerate(values):
+                if v is None:
+                    del columns[n]
+                    del values[n]
+            return columns, values
+
     def primary_keys_from_rows(self, rows):
         pk_columns = [
             column
@@ -271,8 +259,7 @@ class Table:
         ]
         pks = [row[column] for row in rows for column in pk_columns]
         y = itertools.product(pk_columns, pks)
-        x = [self.column_equal_value({z[0]: z[1]}) for z in y ]
-        return x
+        return [self.column_equal_value({z[0]: z[1]}) for z in y ]
 
     def total_rows(self):
         # Count of every row in tables

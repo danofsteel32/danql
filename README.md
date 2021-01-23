@@ -73,10 +73,10 @@ example_text_id = example_table.create_record(example_text='go big or go home')
 ```
 
 ### Design Notes
-Inserts are idempotent. If the values you are trying to insert are already
-associated with a primary key or would violate a unique constraint then the
+Inserts are idempotent. If the values you are trying to insert 
+are already would violate a unique constraint then the
 `sqlite3.IntegrityError` is handled gracefully and the primary key associated
-with those values is returned
+with those values is returned.
 
 Updates and deletes require that you first select the rows you want to delete
 and then pass those rows as an argument to the update and delete methods.
@@ -84,13 +84,13 @@ and then pass those rows as an argument to the update and delete methods.
 ## Goals
 * No dependencies outside of SQLite
 * Small, consistent, low complexity codebase
-* Beautiful code
+* Learn how to write beautiful code
 
 ## Non-Goals
 * Competing with sqlalchemy or any other ORM
 * Supporting any database besides SQLite
 
 ## TODO
-* Some way of getting ids inserted by `batch_insert()`
-* Primary keys can be named something else besides id in `get_id()`
-* Build fully fleshed out example
+* Fewer lines of code
+* less indentation
+* better variable names
