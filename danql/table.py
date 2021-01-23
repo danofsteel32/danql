@@ -1,5 +1,6 @@
 import logging
 import os
+import itertools
 
 from .database import Database
 
@@ -63,7 +64,7 @@ class Table:
     """
 
     def __init__(self, table_name, columns={}, db_file=None,
-                 indexes=set(), primary_keys=set(), foreign_keys=set(),
+                 indexes=set(), primary_keys=[], foreign_keys=set(),
                  parents=[], is_child=False):
 
         self.db_file = db_file
@@ -81,28 +82,28 @@ class Table:
     @columns.setter
     def columns(self, columns):
         if len(columns.keys()) > 0:
-            return self.__columns
+            self.__columns = self.columns
+        else:
+            sql = "PRAGMA table_info(%s)" % (self.table_name,)
+            with Database(self.db_file) as db:
+                schema = db.query(sql)
+            # TODO better var name than to_set
+            to_set = {}
+            for col in schema:
+                name = col['name']
+                nullable = False if col['notnull'] else True
+                pk = True if col['pk'] else False
 
-        sql = "PRAGMA table_info(%s)" % (self.table_name,)
-        with Database(self.db_file) as db:
-            schema = db.query(sql)
-        # TODO better var name than to_set
-        to_set = {}
-        for col in schema:
-            name = col['name']
-            nullable = False if col['notnull'] else True
-            pk = True if col['pk'] else False
+                column = Column(
+                    name=name,
+                    type=col['type'],
+                    nullable=nullable,
+                    default_value=col['dflt_value'],
+                    primary_key=pk
+                )
 
-            column = Column(
-                name=name,
-                type=col['type'],
-                nullable=nullable,
-                default_value=col['dflt_value'],
-                primary_key=pk
-            )
-
-            to_set[name] = column
-        self.__columns = to_set
+                to_set[name] = column
+            self.__columns = to_set
 
     # Pretty sure indexes is a standard object method maybe want to rename this
     @property
@@ -111,19 +112,19 @@ class Table:
     @indexes.setter
     def indexes(self, indexes):
         if len(indexes) > 0:
-            return self.__indexes
-
-        with Database(self.db_file) as db:
-            index_info = [
-                db.query(f"PRAGMA index_info({i['name']})")
-                for i in db.query(f"PRAGMA index_list({self.table_name})")
+            self.__indexes = indexes
+        else:
+            with Database(self.db_file) as db:
+                index_info = [
+                    db.query(f"PRAGMA index_info({i['name']})")
+                    for i in db.query(f"PRAGMA index_list({self.table_name})")
+                ]
+            indexed_columns = [
+                idx['name'] for row in index_info
+                for idx in row
+                if len(index_info) > 0
             ]
-        indexed_columns = [
-            idx['name'] for row in index_info
-            for idx in row
-            if len(index_info) > 0
-        ]
-        self.__indexes = set(indexed_columns)
+            self.__indexes = set(indexed_columns)
 
     @property
     def primary_keys(self):
@@ -131,9 +132,10 @@ class Table:
     @primary_keys.setter
     def primary_keys(self, primary_keys):
         if len(primary_keys) > 0:
-            return self.__primary_keys
-        pks = [col for col in self.columns if self.columns[col].primary_key]
-        self.__primary_keys = set(pks)
+            self.__primary_keys = primary_keys
+        else:
+            pks = [col for col in self.columns if self.columns[col].primary_key]
+            self.__primary_keys= pks
 
     @property
     def parents(self):
@@ -141,13 +143,14 @@ class Table:
     @parents.setter
     def parents(self, parents):
         if len(parents) > 0:
-            return self.__parents
-        with Database(self.db_file) as db:
-            fks = db.query(f"PRAGMA foreign_key_list({self.table_name})")
-        if len(fks) > 0:
-            self.__parents = [dict(fk) for fk in fks]
-        else:
             self.__parents = parents
+        else:
+            with Database(self.db_file) as db:
+                fks = db.query(f"PRAGMA foreign_key_list({self.table_name})")
+            if len(fks) > 0:
+                self.__parents = [dict(fk) for fk in fks]
+            else:
+                self.__parents = []
 
     @property
     def foreign_keys(self):
@@ -155,18 +158,19 @@ class Table:
     @foreign_keys.setter
     def foreign_keys(self, foreign_keys):
         if len(foreign_keys) > 0:
-            return self.__foreign_keys
-        self.__foreign_keys = set([parent['from'] for parent in self.parents])
+            self.__foreign_keys = foreign_keys
+        else:
+            self.__foreign_keys = set([parent['from'] for parent in self.parents])
 
     @property
     def is_child(self):
         return self.__is_child
     @is_child.setter
     def is_child(self, is_child):
-        if is_child:
-            return self.__is_child
         if len(self.parents) > 0:
             self.__is_child = True
+        else:
+            self.__is_child = False
 
     def check_column_args(self, column_args):
         for col in column_args:
@@ -200,10 +204,9 @@ class Table:
             return new_row_id
 
         logging.debug('Row already exists')
-        columns, values = self.sanitize_kwargs(**kwargs)
-        col_val_zipped = dict(zip(columns, values))
-        existing_row_id = self.get_id(**col_val_zipped)
-        return existing_row_id
+        existing_row_id = self.read_record(**kwargs)
+        # TODO Check for len(primary_keys)
+        return existing_row_id[0][self.primary_keys[0]]
 
     def read_record(self, not_equal=False, **kwargs):
         # return set(rows)
@@ -226,7 +229,9 @@ class Table:
         self.check_column_args(kwargs.keys())
         col_val_pairs = self.column_equal_value(kwargs, not_equal=not_equal)
         update_statements = [
-            f"UPDATE {self.table_name} SET {col_val_pairs} WHERE id={pk}"
+            (f"UPDATE {self.table_name} " 
+             f"SET {col_val_pairs} "
+             f"WHERE {pk}")
             for pk in self.primary_keys_from_rows(rows)
         ]
         with Database(self.db_file) as db:
@@ -246,7 +251,7 @@ class Table:
             raise ValueError("rows is required argument")
 
         delete_statements = [
-            f"DELETE FROM {self.table_name} WHERE id={pk}"
+            f"DELETE FROM {self.table_name} WHERE {pk}"
             for pk in self.primary_keys_from_rows(rows)
         ]
         before_count = self.total_rows()
@@ -265,45 +270,9 @@ class Table:
             if column in self.primary_keys
         ]
         pks = [row[column] for row in rows for column in pk_columns]
-        return pks
-
-    def batch_insert(self, val_list):
-        # val_list is List[dict]
-        # Much faster when inserting lots of values as long as none
-        # of the values violate uniqueness constraints (Best Case)
-        # If uniqueness violation then have to try inserting them one
-        # at a time with create_record() (Worst Case)
-        # Returns number of rows created
-        columns = val_list[0].keys()
-        self.check_column_args(columns)
-        columns = ','.join(list(columns))
-       
-        for_insert = []
-        for val in val_list:
-            raw = list(val.values())
-            for_insert.append(f"({self.properly_quoted(raw)})")
-        values = ','.join(for_insert)
-        batch_sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
-        logging.debug(batch_sql)
-        before_count = self.total_rows()
-        with Database(self.db_file) as db:
-            inserted = db.insert(batch_sql)
-        if inserted is not None:
-            after_count = self.total_rows()
-            row_delta = after_count - before_count
-            return row_delta
-        logging.debug("Your values violated uniqueness constraints")
-        logging.debug("Now inserting values one set at time as work around")
-
-        with Database(self.db_file) as db:
-            for values in for_insert:
-                sql = f"INSERT INTO {self.table_name} ({columns}) VALUES {values}"
-                logging.debug(sql)
-                if db.insert(sql) is None:
-                    logging.debug(f"Violating values {values}")
-        after_count = self.total_rows()
-        row_delta = after_count - before_count
-        return row_delta
+        y = itertools.product(pk_columns, pks)
+        x = [self.column_equal_value({z[0]: z[1]}) for z in y ]
+        return x
 
     def total_rows(self):
         # Count of every row in tables
@@ -332,25 +301,6 @@ class Table:
             results = db.query(sql)
         return results
 
-    def get_id(self, **kwargs):
-        # Just want the id of some row(s)
-        # Returns id, set(ids), or None if does not exist
-        if kwargs == {}:
-            sql = f"SELECT id FROM {self.table_name}"
-        elif self.check_column_args(kwargs.keys()):
-            col_val_pairs = self.column_equal_value(kwargs)
-            sql = f"SELECT id FROM {self.table_name} WHERE {col_val_pairs}"
-
-        logging.debug(kwargs)
-        logging.debug(sql)
-        with Database(self.db_file) as db:
-            results = db.query(sql)
-        if len(results) < 1:
-            return None
-        elif len(results) == 1:
-            return results.pop()['id']
-        return set([row['id'] for row in results])
-    
     def column_equal_value(self, col_val_pairs, not_equal=False):
         pairs = []
         for column in col_val_pairs:

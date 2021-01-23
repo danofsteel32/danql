@@ -34,25 +34,6 @@ class TestDanql(unittest.TestCase):
         gs_id2 = self.Breed.create_record(name='german shepherd')
         self.assertEqual(gs_id1, gs_id2)
 
-    def test_batch_insert_one_column_only_violate_constraint(self):
-        self.Breed.create_record(name='german shepherd')
-        val_list = [dict(name='cow'), dict(name='cat'), dict(name='german shepherd')]
-        rows_created = self.Breed.batch_insert(val_list=val_list)
-        self.assertEqual(rows_created, 2)
-
-    # .05s slowest test
-    def test_batch_insert_multiple_columns_violate_constraint(self):
-        gs_id = self.Breed.create_record(name='german shepherd')
-        aus_id = self.Breed.create_record(name='aussie shepherd')
-        cbf_id = self.Owner.create_record(name='chef bobby flay')
-        self.Dog.create_record(breed_id=gs_id, owner_id=cbf_id, name='larry')
-        val_list = [
-            dict(breed_id=aus_id, owner_id=cbf_id, name='jerry'),
-            dict(breed_id=gs_id, owner_id=cbf_id, name='larry')
-        ]
-        rows_created = self.Dog.batch_insert(val_list)
-        self.assertEqual(rows_created, 1)
-
     def test_total_rows(self):
         before = self.Breed.total_rows()
         self.assertEqual(before, 0)
@@ -65,15 +46,6 @@ class TestDanql(unittest.TestCase):
         _is = self.Dog.column_equal_value(col_val_pairs)
         _not = self.Dog.column_equal_value(col_val_pairs, not_equal=True)
 
-    def test_get_id_when_no_id(self):
-        corn_dog = self.Breed.get_id(name='corn dog')
-        self.assertIsNone(corn_dog)
-
-    def test_get_id(self):
-        self.Breed.create_record(name='german shepherd')
-        gs_id = self.Breed.get_id(name='german shepherd')
-        self.assertEqual(gs_id, 1)
-
     def test_update_record(self):
         self.Breed.create_record(name='german shepherd')
         rows = self.Breed.read_record(name='german shepherd')
@@ -85,25 +57,6 @@ class TestDanql(unittest.TestCase):
         rows = self.Breed.read_record(name='german shepherd')
         deleted = self.Breed.delete_record(rows=rows)
         self.assertEqual(deleted, 1)
-
-    def test_row_set_intersection(self):
-        gs_id = self.Breed.create_record(name='german shepherd')
-        aus_id = self.Breed.create_record(name='aussie shepherd')
-        cbf_id = self.Owner.create_record(name='chef bobby flay')
-        bob_id = self.Owner.create_record(name='bob bobbers')
-        dog_list = [
-            dict(breed_id=aus_id, owner_id=cbf_id, name='jerry'),
-            dict(breed_id=gs_id, owner_id=cbf_id, name='garry'),
-            dict(breed_id=aus_id, owner_id=cbf_id, name='larry'),
-            dict(breed_id=gs_id, owner_id=bob_id, name='bob_dog')
-        ]
-        self.Dog.batch_insert(dog_list)
-        # Now get all dogs where breed=gs and owner!=cbf
-        gs_breed_dogs = self.Dog.read_record(breed_id=gs_id)
-        not_cbf = self.Dog.read_record(owner_id=cbf_id, not_equal=True)
-
-        intersection = set(gs_breed_dogs).intersection(set(not_cbf))
-        self.assertEqual((4, 1, 2, 'bob_dog'), tuple(intersection.pop()))
 
     def test_sql_injection(self):
         gs_id = self.Breed.create_record(name='german shepherd')
