@@ -1,26 +1,17 @@
 # danql
 
 ## Disclaimer
-Only works for SQLite and relies on string building to generate queries so not
-safe for web. Not meant for production use. Simply my attempt to
-deal with the
+Not meant to actually be used by anyone. This is bad code because it uses string building to create queries. Wrote this to learn how an ORM might be implemented and
+see first hand the
 [object-relational impedence mismatch](http://blogs.tedneward.com/post/the-vietnam-of-computer-science/).
 
-## About
-Orms typically don't work very well for people who like SQL. But writing the basic 
-CRUD ops for every table simply takes too long. This library is the sweet spot for me 
-in that it makes the easy stuff quick and the hard stuff easily doable in plain sql.
-
-## Usage Guide
-You probably already have SQLite installed but if you don't just install it
-with your distros package manager or brew.
 
 ### Running Tests
 ```
 make test
 ```
 ### Installation
-``` sh
+```
 make install
 ```
 ### Usage
@@ -74,23 +65,7 @@ example_text_id = example_table.create_record(example_text='go big or go home')
 
 ### Design Notes
 Inserts are idempotent. If the values you are trying to insert 
-are already would violate a unique constraint then the
-`sqlite3.IntegrityError` is handled gracefully and the primary key associated
-with those values is returned.
+are would violate a unique constraint then the`sqlite3.IntegrityError` exception is handled gracefully and the primary key associated with those values is returned.
 
 Updates and deletes require that you first select the rows you want to delete
 and then pass those rows as an argument to the update and delete methods.
-
-## Goals
-* No dependencies outside of SQLite
-* Small, consistent, low complexity codebase
-* Learn how to write beautiful code
-
-## Non-Goals
-* Competing with sqlalchemy or any other ORM
-* Supporting any database besides SQLite
-
-## TODO
-* Fewer lines of code
-* less indentation
-* better variable names
